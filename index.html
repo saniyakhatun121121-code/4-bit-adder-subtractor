@@ -1,0 +1,386 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>4-Bit Adder-Subtractor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: inputs strip, live schematic (XOR row over a full-adder row), result + gate trace, exhaustive verifier. Signal HIGH is the one warm accent; everything else is cool slate. */
+:root{
+  --bg:#EDF0F2; --panel:#F8FAFB; --ink:#16212B; --muted:#55646F; --line:#C9D2D9;
+  --lo:#9AA8B3; --hi:#C2410C; --hi-soft:#FCE3D6;
+  --ok:#17794A; --ok-soft:#DDF1E5; --bad:#B42318; --bad-soft:#FBE1DE;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F161C; --panel:#162029; --ink:#E6EDF2; --muted:#93A3B0; --line:#2A3947;
+    --lo:#4A5C6B; --hi:#FFA94D; --hi-soft:#3A2A17;
+    --ok:#4CC38A; --ok-soft:#14301F; --bad:#FF7B72; --bad-soft:#3B1A18;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F161C; --panel:#162029; --ink:#E6EDF2; --muted:#93A3B0; --line:#2A3947;
+  --lo:#4A5C6B; --hi:#FFA94D; --hi-soft:#3A2A17;
+  --ok:#4CC38A; --ok-soft:#14301F; --bad:#FF7B72; --bad-soft:#3B1A18;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font:15px/1.55 var(--font-ui);
+  padding-block:28px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font:600 clamp(26px,5vw,38px)/1.1 var(--font-ui);letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+h2{font:600 17px/1.3 var(--font-ui);margin:0 0 4px}
+.eyebrow{font:500 12px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.lede{max-width:68ch;margin:0;color:var(--muted)}
+.sub{margin:0 0 14px;color:var(--muted);font-size:14px;max-width:70ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+code,.mono{font-family:var(--font-mono)}
+
+/* inputs */
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;align-items:start}
+.field{min-width:0;display:flex;flex-direction:column;gap:8px}
+.field>.lab{font:500 12px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bits{display:flex;gap:8px}
+.bit{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:8px 0 6px;font:600 20px var(--font-mono);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.bit small{font:400 10px var(--font-mono);color:var(--muted)}
+.bit[aria-pressed="true"]{background:var(--hi-soft);border-color:var(--hi);color:var(--hi)}
+.bit[aria-pressed="true"] small{color:var(--hi)}
+.numrow{display:flex;align-items:center;gap:8px;font:13px var(--font-mono);color:var(--muted)}
+input[type=number],select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:14px var(--font-mono);min-width:0}
+input[type=number]{width:76px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;padding:11px 8px;background:var(--bg);color:var(--ink);border:0;font:500 14px var(--font-ui);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+.hint{font:12px var(--font-mono);color:var(--muted)}
+
+/* schematic */
+.scroll{overflow-x:auto}
+svg.sch{display:block;width:100%;min-width:620px;height:auto}
+.w{fill:none;stroke:var(--lo);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.w.on{stroke:var(--hi)}
+.box{fill:var(--panel);stroke:var(--muted);stroke-width:1.5}
+.node rect{fill:var(--panel);stroke:var(--lo);stroke-width:1.5}
+.node.on rect{fill:var(--hi-soft);stroke:var(--hi)}
+.node text{fill:var(--ink);font:500 12px var(--font-mono)}
+.dot{fill:var(--muted)}
+.lbl{fill:var(--muted);font:11px var(--font-mono)}
+.pin{fill:var(--muted);font:10px var(--font-mono)}
+.gt{fill:var(--ink);font:600 12px var(--font-mono)}
+.fa{fill:var(--ink);font:600 15px var(--font-mono)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font:12px var(--font-mono);color:var(--muted)}
+.legend i{display:inline-block;width:22px;height:0;border-top:3px solid var(--lo);vertical-align:middle;margin-right:6px}
+.legend i.h{border-color:var(--hi)}
+.faultnote{font:12px var(--font-mono);color:var(--bad);margin:0 0 10px}
+
+/* result */
+.result{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+.big{font:600 clamp(20px,4.6vw,30px)/1.25 var(--font-mono);overflow-wrap:anywhere}
+.dec{font:500 16px var(--font-mono);color:var(--muted);margin-top:4px}
+.flags{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.flags div{display:flex;gap:10px;align-items:baseline}
+.flags b{font:600 13px var(--font-mono);min-width:92px;color:var(--muted)}
+.chip{display:inline-block;padding:2px 9px;border-radius:99px;font:600 12px var(--font-mono)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+
+/* tables */
+table{border-collapse:collapse;width:100%;font:13px var(--font-mono);font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:500;background:var(--panel);position:sticky;top:0}
+td.on{color:var(--hi);font-weight:600}
+td i{font-style:normal;color:var(--muted)}
+tr.bad td{background:var(--bad-soft)}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+.tablebox{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:12px}
+.load{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:2px 9px;font:12px var(--font-mono);cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+.stat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg)}
+.stat .n{font:600 22px var(--font-mono)}
+.stat .t{font:12px var(--font-mono);color:var(--muted)}
+.stat.ok .n{color:var(--ok)}.stat.bad .n{color:var(--bad)}
+.toolbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font:13px var(--font-mono);color:var(--muted)}
+.toolbar label{display:flex;gap:8px;align-items:center}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+.how p{margin:4px 0 0;color:var(--muted);font-size:14px}
+@media (prefers-reduced-motion:no-preference){.w,.node rect{transition:stroke .15s,fill .15s}}
+</style>
+
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Digital logic lab</p>
+    <h1>4-Bit Adder-Subtractor</h1>
+    <p class="lede">One adder, two operations. With mode input M = 0 it computes A + B. With M = 1, each XOR gate flips a bit of B and M also feeds the first carry-in, so the adder computes A + (NOT B) + 1, which is A − B.</p>
+  </header>
+
+  <section class="panel controls" aria-label="Inputs">
+    <div class="field">
+      <span class="lab">Input A</span>
+      <div class="bits" id="bitsA"></div>
+      <div class="numrow"><label for="aNum">decimal</label><input id="aNum" type="number" min="0" max="15" inputmode="numeric"></div>
+    </div>
+    <div class="field">
+      <span class="lab">Input B</span>
+      <div class="bits" id="bitsB"></div>
+      <div class="numrow"><label for="bNum">decimal</label><input id="bNum" type="number" min="0" max="15" inputmode="numeric"></div>
+    </div>
+    <div class="field">
+      <span class="lab">Mode control M</span>
+      <div class="seg" role="group" aria-label="Mode">
+        <button type="button" id="mAdd">Add &middot; M=0</button>
+        <button type="button" id="mSub">Subtract &middot; M=1</button>
+      </div>
+      <span class="hint">Tap the bits to flip them. The schematic updates live.</span>
+    </div>
+  </section>
+
+  <section class="panel" id="schematic">
+    <h2>Live schematic</h2>
+    <p class="sub">Orange wires carry a 1, grey wires carry a 0. Carries ripple from bit 0 on the right to bit 3 on the left.</p>
+    <p class="faultnote" id="faultNote" hidden></p>
+    <div class="scroll"><div id="svgHost"></div></div>
+    <div class="legend"><span><i class="h"></i>logic 1</span><span><i></i>logic 0</span><span>XOR row: B &oplus; M</span><span>FA = full adder</span></div>
+  </section>
+
+  <section class="panel">
+    <h2>Result</h2>
+    <p class="sub">Checked against ordinary integer arithmetic on every change.</p>
+    <div class="result" aria-live="polite">
+      <div>
+        <div class="big" id="eq"></div>
+        <div class="dec" id="dec"></div>
+      </div>
+      <div class="flags" id="flags"></div>
+    </div>
+    <h2 style="margin-top:20px">Gate-level trace</h2>
+    <p class="sub">Every full adder is built from two XOR gates, two AND gates and one OR gate. B&prime; is B &oplus; M.</p>
+    <div class="scroll"><table id="trace"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Exhaustive verification</h2>
+    <p class="sub">All 16 &times; 16 input pairs in both modes, 512 vectors, each run through the gate-level model and compared with integer arithmetic. Inject a fault to see the checker catch it.</p>
+    <div class="toolbar">
+      <label for="fault">Fault <select id="fault">
+        <option value="none">None (correct circuit)</option>
+        <option value="bypass">XOR row bypassed: B goes straight in</option>
+        <option value="cin0">Carry-in tied to 0</option>
+      </select></label>
+      <label for="fMode">Mode <select id="fMode"><option value="all">All</option><option value="0">Add only</option><option value="1">Subtract only</option></select></label>
+      <label for="fStat">Show <select id="fStat"><option value="all">All</option><option value="pass">Passing</option><option value="fail">Failing</option></select></label>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="tablebox"><table id="vtable"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>How it works</h2>
+    <div class="how">
+      <div><b>XOR as a controlled inverter</b><p>B &oplus; 0 = B and B &oplus; 1 = NOT B. When M = 0 the adder sees B unchanged. When M = 1 it sees the one's complement of B.</p></div>
+      <div><b>Carry-in supplies the +1</b><p>M also drives the carry-in of bit 0. In subtract mode that adds 1, giving A + NOT B + 1, the two's-complement form of A − B.</p></div>
+      <div><b>Reading the carry out</b><p>Add: Cout = 1 means the sum is above 15. Subtract: Cout = 1 means no borrow (A &ge; B). Cout = 0 means the answer is negative and S shows it in two's complement.</p></div>
+    </div>
+  </section>
+</main>
+
+<script>
+//LOGIC-START
+const toNum=a=>a.reduce((n,b,i)=>n+(b<<i),0);
+const toBits=n=>[0,1,2,3].map(i=>(n>>i)&1);
+const bin=n=>n.toString(2).padStart(4,'0');
+// Gate-level model. Arrays are LSB first (index = bit position).
+function sim(A,B,M,fault){
+  const r={a:A,b:B,m:M,x:[],p:[],s:[],g:[],t:[],c:[]};
+  r.c[0]=fault==='cin0'?0:M;
+  for(let i=0;i<4;i++){
+    const x=fault==='bypass'?B[i]:(B[i]^M);   // XOR gate on B
+    const p=A[i]^x;                           // full adder: XOR 1
+    const s=p^r.c[i];                         // XOR 2 -> sum
+    const g=A[i]&x;                           // AND 1
+    const t=p&r.c[i];                         // AND 2
+    r.x[i]=x;r.p[i]=p;r.s[i]=s;r.g[i]=g;r.t[i]=t;
+    r.c[i+1]=g|t;                             // OR -> carry out
+  }
+  return r;
+}
+function expected(A,B,M){
+  const v=M?A-B:A+B;
+  return {v,out:v&15,c:M?(A>=B?1:0):(v>>4)};
+}
+const circuitValue=(M,c,out)=>M?(c?out:out-16):c*16+out;
+function allVectors(fault){
+  const rows=[];
+  for(let M=0;M<2;M++)for(let A=0;A<16;A++)for(let B=0;B<16;B++){
+    const r=sim(toBits(A),toBits(B),M,fault),out=toNum(r.s),c=r.c[4],e=expected(A,B,M);
+    rows.push({M,A,B,out,c,e,ok:out===e.out&&c===e.c});
+  }
+  return rows;
+}
+//LOGIC-END
+
+const $=s=>document.querySelector(s);
+const st={A:toBits(10),B:toBits(3),M:1,fault:'none'};
+
+/* ---------- schematic ---------- */
+function buildSvg(){
+  let w='',b='',n='',l='';
+  const wire=(pts,s)=>{w+=`<polyline class="w" data-s="${s}" points="${pts.map(p=>p.join(',')).join(' ')}"/>`};
+  const node=(cx,cy,label,s)=>{n+=`<g class="node" data-s="${s}"><rect x="${cx-26}" y="${cy-13}" width="52" height="26" rx="4"/><text x="${cx}" y="${cy+4}" text-anchor="middle">${label} <tspan class="val">0</tspan></text></g>`};
+  const dot=(x,y)=>{b+=`<circle class="dot" cx="${x}" cy="${y}" r="3.5"/>`};
+
+  // M node, mode bus and carry-in
+  node(640,19,'M','m');
+  wire([[640,32],[640,72]],'m');
+  wire([[640,72],[134,72]],'m');
+  wire([[640,72],[640,235],[605,235]],'c0');
+  dot(640,72);
+  l+=`<text class="lbl" x="232" y="64" text-anchor="middle">mode bus M</text>`;
+
+  for(let i=0;i<4;i++){
+    const cx=560-140*i;
+    node(cx+25,19,'A'+i,'a'+i);
+    node(cx-38,19,'B'+i,'b'+i);
+    wire([[cx+25,32],[cx+25,200]],'a'+i);
+    wire([[cx-38,32],[cx-38,96]],'b'+i);
+    wire([[cx-6,72],[cx-6,96]],'m'); dot(cx-6,72);
+    wire([[cx-20,132],[cx-20,200]],'x'+i);
+    b+=`<rect class="box" x="${cx-52}" y="96" width="64" height="36" rx="6"/>`;
+    l+=`<text class="gt" x="${cx-20}" y="119" text-anchor="middle">XOR</text>`;
+    b+=`<rect class="box" x="${cx-45}" y="200" width="90" height="70" rx="6"/>`;
+    l+=`<text class="fa" x="${cx}" y="240" text-anchor="middle">FA</text>`;
+    l+=`<text class="pin" x="${cx+25}" y="214" text-anchor="middle">A</text>`;
+    l+=`<text class="pin" x="${cx-20}" y="214" text-anchor="middle">B&#8242;</text>`;
+    l+=`<text class="pin" x="${cx+41}" y="239" text-anchor="end">Cin</text>`;
+    l+=`<text class="pin" x="${cx-41}" y="239" text-anchor="start">Cout</text>`;
+    l+=`<text class="lbl" x="${cx}" y="262" text-anchor="middle">bit ${i}</text>`;
+    const endX=i<3?cx-95:62;
+    wire([[cx-45,235],[endX,235]],'c'+(i+1));
+    l+=`<text class="lbl" x="${(cx-45+endX)/2}" y="226" text-anchor="middle">C${i+1}</text>`;
+    wire([[cx,270],[cx,330]],'s'+i);
+    node(cx,343,'S'+i,'s'+i);
+  }
+  node(36,235,'Cout','c4');
+  return `<svg class="sch" viewBox="0 0 680 366" role="img" aria-label="Four-bit adder-subtractor: four XOR gates feeding four ripple-carry full adders, with mode input M driving the XOR gates and the first carry-in">${w}${b}${l}${n}</svg>`;
+}
+function sigs(r){
+  const o={m:r.m};
+  for(let i=0;i<4;i++){o['a'+i]=r.a[i];o['b'+i]=r.b[i];o['x'+i]=r.x[i];o['s'+i]=r.s[i]}
+  for(let i=0;i<5;i++)o['c'+i]=r.c[i];
+  return o;
+}
+function paintSvg(r){
+  const o=sigs(r);
+  document.querySelectorAll('#svgHost [data-s]').forEach(el=>{
+    const v=o[el.dataset.s];
+    el.classList.toggle('on',v===1);
+    if(el.tagName==='g')el.querySelector('.val').textContent=v;
+  });
+}
+
+/* ---------- inputs ---------- */
+function buildBits(host,key){
+  host.innerHTML='';
+  for(let i=3;i>=0;i--){
+    const bt=document.createElement('button');
+    bt.type='button';bt.className='bit';bt.dataset.i=i;
+    bt.innerHTML=`<span class="v">0</span><small>${1<<i}</small>`;
+    bt.setAttribute('aria-label',`${key} bit ${i}`);
+    bt.onclick=()=>{st[key][i]^=1;update()};
+    host.appendChild(bt);
+  }
+}
+function syncInputs(){
+  for(const key of ['A','B']){
+    document.querySelectorAll(`#bits${key} .bit`).forEach(bt=>{
+      const v=st[key][+bt.dataset.i];
+      bt.setAttribute('aria-pressed',v===1);
+      bt.querySelector('.v').textContent=v;
+    });
+    const num=$('#'+key.toLowerCase()+'Num');
+    if(document.activeElement!==num)num.value=toNum(st[key]);
+  }
+  $('#mAdd').setAttribute('aria-pressed',st.M===0);
+  $('#mSub').setAttribute('aria-pressed',st.M===1);
+}
+
+/* ---------- result + trace ---------- */
+function paintResult(r){
+  const A=toNum(st.A),B=toNum(st.B),M=st.M,out=toNum(r.s),c=r.c[4];
+  const val=circuitValue(M,c,out),e=expected(A,B,M),ok=val===e.v;
+  $('#eq').textContent=M?`${bin(A)} − ${bin(B)} = ${bin(out)}`:`${bin(A)} + ${bin(B)} = ${c} ${bin(out)}`;
+  $('#dec').textContent=`${A} ${M?'−':'+'} ${B} = ${val}`;
+  const msg=M?(c?'No borrow, A ≥ B':'Borrow, A < B: negative, shown in two’s complement'):(c?'Carry out, sum is above 15':'No carry out');
+  const V=r.c[3]^r.c[4];
+  $('#flags').innerHTML=
+    `<div><b>Cout</b><span class="mono">${c}</span> <span>${msg}</span></div>`+
+    `<div><b>Signed overflow</b><span class="mono">V=${V}</span> <span>${V?'Result does not fit 4-bit two’s complement':'Fits 4-bit two’s complement'}</span></div>`+
+    `<div><b>Integer check</b><span class="chip ${ok?'ok':'bad'}">${ok?'MATCH':'MISMATCH'}</span> <span class="mono">expected ${e.v}</span></div>`;
+  let h='<tr><th>Bit</th><th>A</th><th>B</th><th>M</th><th>B′=B⊕M</th><th>Cin</th><th>P=A⊕B′</th><th>Sum=P⊕Cin</th><th>G=A·B′</th><th>P·Cin</th><th>Cout=G+P·Cin</th></tr>';
+  const cell=v=>`<td class="${v?'on':''}">${v}</td>`;
+  for(let i=3;i>=0;i--){
+    h+=`<tr><td>${i}</td>${cell(r.a[i])}${cell(r.b[i])}${cell(r.m)}${cell(r.x[i])}${cell(r.c[i])}${cell(r.p[i])}${cell(r.s[i])}${cell(r.g[i])}${cell(r.t[i])}${cell(r.c[i+1])}</tr>`;
+  }
+  $('#trace').innerHTML=h;
+}
+
+function update(){
+  const r=sim(st.A,st.B,st.M,st.fault);
+  syncInputs();paintSvg(r);paintResult(r);
+  const fn=$('#faultNote');
+  fn.hidden=st.fault==='none';
+  fn.textContent=st.fault==='bypass'?'Fault injected: the XOR row is bypassed, so B is never inverted.':st.fault==='cin0'?'Fault injected: the first carry-in is tied to 0, so the +1 is missing.':'';
+}
+
+/* ---------- verifier ---------- */
+let vec=[];
+function renderVerify(){
+  vec=allVectors(st.fault);
+  const tot=vec.length,pass=vec.filter(v=>v.ok).length;
+  const m=k=>{const rows=vec.filter(v=>v.M===k);return[rows.filter(v=>v.ok).length,rows.length]};
+  const [a1,a2]=m(0),[s1,s2]=m(1);
+  const stat=(n,t,good)=>`<div class="stat ${good?'ok':'bad'}"><div class="n">${n}</div><div class="t">${t}</div></div>`;
+  $('#stats').innerHTML=stat(`${pass}/${tot}`,'vectors pass',pass===tot)+stat(`${a1}/${a2}`,'add (M=0)',a1===a2)+stat(`${s1}/${s2}`,'subtract (M=1)',s1===s2);
+  const fm=$('#fMode').value,fs=$('#fStat').value;
+  let h='<tr><th>Operation</th><th>A</th><th>B</th><th>Expected (C S)</th><th>Circuit (C S)</th><th>Status</th><th></th></tr>';
+  vec.forEach((v,idx)=>{
+    if(fm!=='all'&&String(v.M)!==fm)return;
+    if(fs==='pass'&&!v.ok)return;
+    if(fs==='fail'&&v.ok)return;
+    h+=`<tr class="${v.ok?'':'bad'}"><td>${v.M?'A − B':'A + B'}</td><td>${bin(v.A)} <i>${v.A}</i></td><td>${bin(v.B)} <i>${v.B}</i></td><td>${v.e.c} ${bin(v.e.out)} <i>${v.e.v}</i></td><td>${v.c} ${bin(v.out)}</td><td class="${v.ok?'pass':'fail'}">${v.ok?'PASS':'FAIL'}</td><td><button type="button" class="load" data-i="${idx}">Load</button></td></tr>`;
+  });
+  $('#vtable').innerHTML=h;
+}
+
+/* ---------- wiring ---------- */
+$('#svgHost').innerHTML=buildSvg();
+buildBits($('#bitsA'),'A');buildBits($('#bitsB'),'B');
+$('#mAdd').onclick=()=>{st.M=0;update()};
+$('#mSub').onclick=()=>{st.M=1;update()};
+for(const key of ['A','B']){
+  $('#'+key.toLowerCase()+'Num').addEventListener('input',e=>{
+    const n=Math.max(0,Math.min(15,parseInt(e.target.value,10)||0));
+    st[key]=toBits(n);update();
+  });
+  $('#'+key.toLowerCase()+'Num').addEventListener('blur',()=>update());
+}
+$('#fault').onchange=e=>{st.fault=e.target.value;renderVerify();update()};
+$('#fMode').onchange=renderVerify;
+$('#fStat').onchange=renderVerify;
+$('#vtable').addEventListener('click',e=>{
+  const bt=e.target.closest('.load');if(!bt)return;
+  const v=vec[+bt.dataset.i];
+  st.A=toBits(v.A);st.B=toBits(v.B);st.M=v.M;update();
+  $('#schematic').scrollIntoView({behavior:'smooth',block:'start'});
+});
+renderVerify();update();
+</script>
+
+</body></html>
